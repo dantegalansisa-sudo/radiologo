@@ -5,9 +5,11 @@
 #  puede lanzar a mano desde la pestana Actions.
 #
 #  Se usa lftp en lugar de la accion FTP-Deploy porque el FTPS de este
-#  hosting corta la conexion de datos de vez en cuando ("ECONNRESET (data
-#  socket)"): lftp reconecta y reintenta cada archivo por su cuenta, sube de
-#  uno en uno en modo pasivo, y el paso entero se repite hasta tres veces.
+#  hosting corta la conexion de datos ("ECONNRESET (data socket)"): el
+#  cortafuegos no abre los puertos pasivos cuando el canal de control va
+#  cifrado. El job prueba primero FTPS; si el canal de datos no responde,
+#  publica por FTP sin cifrar. lftp reconecta y reintenta cada archivo, sube
+#  de uno en uno en modo pasivo, y el paso entero se repite hasta tres veces.
 #
 #  Nunca borra nada del servidor: mirror sin --delete solo sube o sustituye
 #  archivos de dist/. .user.ini (lo genera cPanel) no se toca.
@@ -30,10 +32,10 @@ on:
   workflow_dispatch:
     inputs:
       protocolo:
-        description: 'ftps (cifrado, por defecto) o ftp (sin cifrar, solo si FTPS no funciona)'
-        default: ftps
+        description: 'auto (prueba FTPS y, si el canal de datos falla, usa ftp), ftps o ftp'
+        default: auto
         type: choice
-        options: [ftps, ftp]
+        options: [auto, ftps, ftp]
       carpeta:
         description: 'Carpeta remota (./ si el usuario FTP ya apunta a public_html)'
         default: public_html/
@@ -75,7 +77,7 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           # lftp la lee de LFTP_PASSWORD: asi no pasa por la linea de comandos
           LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          PROTOCOLO: ${{ github.event.inputs.protocolo || 'ftps' }}
+          PROTOCOLO: ${{ github.event.inputs.protocolo || 'auto' }}
           CARPETA: ${{ github.event.inputs.carpeta || 'public_html/' }}
         run: |
           if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$LFTP_PASSWORD" ]; then
@@ -83,50 +85,74 @@ jobs:
             exit 1
           fi
 
-          if [ "$PROTOCOLO" = "ftp" ]; then
-            SSL="set ftp:ssl-allow false"
-          else
-            # FTPS explicito: control y datos cifrados. El certificado del
-            # hosting llega con la cadena incompleta, por eso no se verifica.
-            SSL="set ftp:ssl-allow true
+          # Ajustes de FTPS explicito (control y datos cifrados). El certificado
+          # del hosting llega con la cadena incompleta, por eso no se verifica.
+          FTPS="set ftp:ssl-allow true
           set ftp:ssl-force true
           set ftp:ssl-protect-data true
           set ftp:ssl-protect-list true
           set ssl:verify-certificate false"
-          fi
+          FTP="set ftp:ssl-allow false"
 
-          cat > lftp.cmd <<EOF
-          set cmd:fail-exit true
-          $SSL
-          # modo pasivo, una transferencia a la vez y reintentos generosos:
-          # el servidor corta la conexion de datos de vez en cuando
+          # Comunes: modo pasivo, una transferencia a la vez y reintentos
+          # generosos, porque el servidor corta la conexion de datos a veces.
+          COMUN="set cmd:fail-exit true
           set ftp:passive-mode true
           set ftp:prefer-epsv false
           set ftp:use-mdtm false
-          set net:timeout 120
-          set net:max-retries 10
-          set net:persist-retries 10
-          set net:reconnect-interval-base 5
-          set net:reconnect-interval-multiplier 1.5
-          set net:reconnect-interval-max 60
-          set net:limit-rate 0
           set xfer:clobber true
           set mirror:parallel-transfer-count 1
-          set mirror:use-pget-n 1
-          open --env-password -u "$FTP_USERNAME" "$PROTOCOLO://$FTP_SERVER"
-          mirror --reverse --verbose=1 --no-perms --no-symlinks --transfer-all \
-            --exclude-glob .user.ini --exclude-glob .git* \
-            ./dist/ "$CARPETA"
+          set mirror:use-pget-n 1"
+
+          # ---- 1. sonda: ¿funciona la conexion de datos con FTPS?
+          # Un LIST necesita el canal de datos. Si con FTPS se corta, se
+          # publica por FTP sin cifrar: el cortafuegos del hosting solo
+          # abre los puertos pasivos cuando puede leer el canal de control.
+          if [ "$PROTOCOLO" = "auto" ]; then
+            cat > sonda.cmd <<EOF
+          $COMUN
+          $FTPS
+          set net:timeout 25
+          set net:max-retries 2
+          set net:reconnect-interval-base 3
+          open --env-password -u "$FTP_USERNAME" "ftp://$FTP_SERVER"
+          cls -1 "$CARPETA" > /dev/null
+          bye
+          EOF
+            if lftp -f sonda.cmd; then
+              PROTOCOLO=ftps
+              echo "FTPS responde en el canal de datos: se publica cifrado."
+            else
+              PROTOCOLO=ftp
+              echo "::warning::FTPS no completa la conexion de datos en este hosting. Se publica por FTP sin cifrar (solo van los archivos de la web; las credenciales viajan por la red del hosting)."
+            fi
+          fi
+
+          if [ "$PROTOCOLO" = "ftp" ]; then SSL="$FTP"; else SSL="$FTPS"; fi
+          echo "protocolo=$PROTOCOLO" >> "$GITHUB_OUTPUT"
+
+          # ---- 2. subida
+          cat > lftp.cmd <<EOF
+          $COMUN
+          $SSL
+          set net:timeout 60
+          set net:max-retries 6
+          set net:persist-retries 6
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-multiplier 1.5
+          set net:reconnect-interval-max 40
+          open --env-password -u "$FTP_USERNAME" "ftp://$FTP_SERVER"
+          mirror --reverse --verbose=1 --no-perms --no-symlinks --transfer-all             --exclude-glob .user.ini --exclude-glob .git*             ./dist/ "$CARPETA"
           bye
           EOF
 
           # el paso entero se repite si lftp acaba en error (tras agotar sus
           # propios reintentos por archivo)
           for intento in 1 2 3; do
-            echo "::group::Subida, intento $intento"
+            echo "::group::Subida por $PROTOCOLO, intento $intento"
             if lftp -f lftp.cmd; then
               echo "::endgroup::"
-              echo "Publicado en $FTP_SERVER/$CARPETA"
+              echo "Publicado en $FTP_SERVER/$CARPETA por $PROTOCOLO"
               exit 0
             fi
             echo "::endgroup::"
@@ -138,5 +164,5 @@ jobs:
       - name: Aviso si el FTP rechazo la conexion
         if: failure() && steps.ftp.outcome == 'failure'
         run: |
-          echo "::error title=La publicacion fallo::Si el registro muestra errores de conexion o de autenticacion FTP, revisa en el panel del hosting el interruptor 'FTP bloqueado' (se activa solo cada 28 dias), desbloquealo y vuelve a lanzar este job con 'Re-run jobs'. Si el error es de la conexion de datos con FTPS, lanza el job a mano (Run workflow) con protocolo 'ftp'."
+          echo "::error title=La publicacion fallo::Si el registro muestra errores de conexion o de autenticacion FTP, revisa en el panel del hosting el interruptor 'FTP bloqueado' (se activa solo cada 28 dias), desbloquealo y vuelve a lanzar este job con 'Re-run jobs'. Si el error persiste en el canal de datos, lanza el job a mano (Run workflow) con protocolo 'ftp'."
           exit 1
