@@ -342,9 +342,19 @@ function anotarCorreo(PDO $bd, string $tabla, int $id, string $columna): void
 }
 
 /* ---------- plantilla de bienvenida (diseno del cliente) ---------- */
+
+/** Sufijo ?v= con la fecha del archivo: si se cambia una imagen del correo, el CDN no sirve la version antigua. */
+function versionImagen(string $ruta): string
+{
+    $fecha = @filemtime(dirname(__DIR__) . $ruta);
+    return $fecha ? '?v=' . $fecha : '';
+}
+
 function correoBienvenida(string $tratamiento, string $nombre): string
 {
     $u = URL_SITIO;
+    $vc = versionImagen('/img/correo/cabecera.jpg');
+    $vp = versionImagen('/img/correo/pie.jpg');
     $saludo = escapar(trim("$tratamiento $nombre"));
     $anio = date('Y');
     $beneficios = [
@@ -365,7 +375,7 @@ function correoBienvenida(string $tratamiento, string $nombre): string
 <html lang="es">
 <body style="margin:0;padding:20px 12px;background:#eef2f9;font-family:Arial,Helvetica,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dde5f2">
-  <tr><td style="padding:0"><img src="$u/img/correo/cabecera.jpg" width="660" alt="Radiologo Nacional — Conectando especialistas por una mejor salud" style="display:block;width:100%;height:auto"></td></tr>
+  <tr><td style="padding:0"><img src="$u/img/correo/cabecera.jpg$vc" width="660" alt="Radiologo Nacional — Conectando especialistas por una mejor salud" style="display:block;width:100%;height:auto"></td></tr>
   <tr><td style="padding:26px 30px 8px">
     <div style="font-size:30px;font-weight:800;color:#0a1e4a;letter-spacing:-0.5px">Hola $saludo,</div>
     <div style="font-size:19px;font-weight:700;color:#1257d5;margin-top:6px">¡Gracias por registrarte en Radiologo Nacional!</div>
@@ -384,7 +394,7 @@ function correoBienvenida(string $tratamiento, string $nombre): string
     </table>
   </td></tr>
   <tr><td style="padding:14px 22px 20px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr>$celdas</tr></table></td></tr>
-  <tr><td style="padding:0"><img src="$u/img/correo/pie.jpg" width="660" alt="Radiologo Nacional — Potenciado con tecnología dominicana — HDCO Health" style="display:block;width:100%;height:auto"></td></tr>
+  <tr><td style="padding:0"><img src="$u/img/correo/pie.jpg$vp" width="660" alt="Radiologo Nacional — Potenciado con tecnología dominicana — HDCO Health" style="display:block;width:100%;height:auto"></td></tr>
   <tr><td style="padding:14px 20px 18px;text-align:center;font-size:12px;line-height:1.6;color:#6b7891">Este es un mensaje automático, por favor no respondas a este correo.<br>© $anio Radiologo Nacional. República Dominicana.</td></tr>
 </table>
 </body>
