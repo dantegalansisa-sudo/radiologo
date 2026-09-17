@@ -710,7 +710,11 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
 }
+/* position: relative para que la casilla oculta quede dentro de su etiqueta:
+   si no, al recibir el foco el navegador desplazaba el modal hasta dejarlo
+   en blanco */
 .casilla {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -724,9 +728,13 @@
 }
 .casilla input {
   position: absolute;
-  opacity: 0;
+  left: 0.7rem;
+  top: 50%;
   width: 1px;
   height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .casilla:hover {
   border-color: var(--azul);
