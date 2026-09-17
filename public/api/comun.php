@@ -1,18 +1,24 @@
 <?php
 /*
   Radiologo Nacional: funciones comunes de los formularios (registro y
-  contacto). Envia por SMTP con PHPMailer.
+  contacto). Envia por SMTP con PHPMailer y guarda los registros en MySQL.
 
-  La configuracion SMTP NO va en el repositorio. Se lee, por este orden:
-    1. Variables de entorno RN_SMTP_HOST, _PORT, _SECURE, _USER, _PASS,
-       _FROM, _FROM_NAME, _TO.
+  La configuracion NO va en el repositorio. Se lee, por este orden:
+    1. Variables de entorno: RN_SMTP_HOST, _PORT, _SECURE, _USER, _PASS,
+       _FROM, _FROM_NAME, _TO (correo); RN_DB_HOST, _PORT, _NAME, _USER,
+       _PASS, _TABLE (base de datos); RN_DOCUMENTOS (carpeta de documentos).
     2. Un archivo PHP que devuelve un array, fuera de public_html:
        - la ruta de RN_SMTP_CONFIG, si existe, o
        - <carpeta padre de public_html>/radiologonacional-smtp.php
+       La base de datos va en la clave 'db' de ese mismo archivo o, si se
+       prefiere, en <carpeta padre>/radiologonacional-bd.php (solo el array
+       de 'db').
 
   Campos del archivo (ver radiologonacional-smtp.example.php):
     host, port, secure ('ssl' o 'tls'), user, pass, from, from_name,
-    to (adonde llegan los registros y mensajes).
+    to (adonde llegan los registros y mensajes),
+    db => [host, port, name, user, pass, table],
+    documentos (carpeta privada de los archivos subidos; opcional).
 */
 
 declare(strict_types=1);
@@ -29,6 +35,10 @@ const REMITE_POR_DEFECTO = 'noreply@radiologonacional.com';
 const REMITE_NOMBRE = 'Radiologo Nacional';
 const CORREO_VALIDO = '/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/';
 const URL_SITIO = 'https://radiologonacional.com';
+const TABLA_REGISTROS = 'registros';
+
+// hora de la Republica Dominicana para fechas, carpetas y correos
+date_default_timezone_set('America/Santo_Domingo');
 
 function responder(int $codigo, array $cuerpo): void
 {
@@ -55,7 +65,26 @@ function texto($valor, int $maximo = 500): string
         return '';
     }
     $t = trim((string) $valor);
-    return function_exists('mb_substr') ? mb_substr($t, 0, $maximo) : substr($t, 0, $maximo);
+    if (!function_exists('mb_substr')) {
+        return substr($t, 0, $maximo);
+    }
+    // bytes que no son UTF-8 valido (no vienen de un navegador) se descartan
+    if (!mb_check_encoding($t, 'UTF-8')) {
+        $t = mb_convert_encoding($t, 'UTF-8', 'UTF-8');
+    }
+    return mb_substr($t, 0, $maximo);
+}
+
+/** Texto apto para nombres de carpeta y archivo: minusculas, sin acentos, con guiones. */
+function slug(string $texto, int $maximo = 48): string
+{
+    $t = strtr($texto, [
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u', 'Ñ' => 'n',
+    ]);
+    $t = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $t) ?? '');
+    $t = trim(substr($t, 0, $maximo), '-');
+    return $t !== '' ? $t : 'registro';
 }
 
 /** En desarrollo (dev/php-router.php) los envios se dan por hechos sin SMTP. */
@@ -64,6 +93,64 @@ function simulado(): bool
     return getenv('RN_SIMULAR') === '1';
 }
 
+/* ---------- configuracion (fuera de public_html) ---------- */
+
+/** Carpetas privadas candidatas: la padre de public_html. */
+function carpetasPrivadas(): array
+{
+    // public_html/api/comun.php -> la carpeta padre de public_html
+    $lista = [dirname(__DIR__, 2)];
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+        $padre = dirname($_SERVER['DOCUMENT_ROOT']);
+        if (!in_array($padre, $lista, true)) {
+            $lista[] = $padre;
+        }
+    }
+    return $lista;
+}
+
+/** Lee (una sola vez) el archivo de configuracion; array vacio si no existe. */
+function archivoConfiguracion(): array
+{
+    static $config = null;
+    if ($config !== null) {
+        return $config;
+    }
+    $config = [];
+    $candidatas = [];
+    $ruta = getenv('RN_SMTP_CONFIG');
+    if ($ruta !== false && $ruta !== '') {
+        $candidatas[] = $ruta;
+    }
+    foreach (carpetasPrivadas() as $carpeta) {
+        $candidatas[] = $carpeta . '/radiologonacional-smtp.php';
+    }
+    foreach ($candidatas as $archivo) {
+        if (is_readable($archivo)) {
+            $leido = include $archivo;
+            if (is_array($leido)) {
+                $config = $leido;
+                break;
+            }
+        }
+    }
+    // la base de datos puede ir en un archivo aparte, al lado del de SMTP
+    if (!isset($config['db'])) {
+        foreach (carpetasPrivadas() as $carpeta) {
+            $archivo = $carpeta . '/radiologonacional-bd.php';
+            if (is_readable($archivo)) {
+                $leido = include $archivo;
+                if (is_array($leido)) {
+                    $config['db'] = $leido['db'] ?? $leido;
+                    break;
+                }
+            }
+        }
+    }
+    return $config;
+}
+
+/** Configuracion SMTP, o null si el correo no esta configurado. */
 function leerConfiguracion(): ?array
 {
     $claves = ['host', 'port', 'secure', 'user', 'pass', 'from', 'from_name', 'to'];
@@ -77,27 +164,68 @@ function leerConfiguracion(): ?array
     if (isset($entorno['host'], $entorno['user'], $entorno['pass'])) {
         return $entorno;
     }
-
-    $candidatas = [];
-    $ruta = getenv('RN_SMTP_CONFIG');
-    if ($ruta !== false && $ruta !== '') {
-        $candidatas[] = $ruta;
-    }
-    // public_html/api/comun.php -> la carpeta padre de public_html
-    $candidatas[] = dirname(__DIR__, 2) . '/radiologonacional-smtp.php';
-    if (!empty($_SERVER['DOCUMENT_ROOT'])) {
-        $candidatas[] = dirname($_SERVER['DOCUMENT_ROOT']) . '/radiologonacional-smtp.php';
-    }
-    foreach ($candidatas as $archivo) {
-        if (is_readable($archivo)) {
-            $config = include $archivo;
-            if (is_array($config) && isset($config['host'], $config['user'], $config['pass'])) {
-                return $config;
-            }
-        }
+    $config = archivoConfiguracion();
+    if (isset($config['host'], $config['user'], $config['pass'])) {
+        return $config;
     }
     return null;
 }
+
+/** Configuracion de la base de datos, o null si no esta configurada. */
+function leerConfiguracionBD(): ?array
+{
+    $claves = ['host', 'port', 'name', 'user', 'pass', 'table'];
+    $entorno = [];
+    foreach ($claves as $clave) {
+        $valor = getenv('RN_DB_' . strtoupper($clave));
+        if ($valor !== false && $valor !== '') {
+            $entorno[$clave] = $valor;
+        }
+    }
+    if (isset($entorno['name'], $entorno['user'])) {
+        return $entorno;
+    }
+    $db = archivoConfiguracion()['db'] ?? null;
+    if (is_array($db) && isset($db['name'], $db['user'])) {
+        return $db;
+    }
+    return null;
+}
+
+/** Conexion PDO a MySQL/MariaDB. Lanza excepcion si no se puede conectar. */
+function conectarBD(array $db): PDO
+{
+    $host = (string) ($db['host'] ?? 'localhost');
+    $puerto = (int) ($db['port'] ?? 3306);
+    $dsn = "mysql:host=$host;port=$puerto;dbname={$db['name']};charset=utf8mb4";
+    return new PDO($dsn, (string) $db['user'], (string) ($db['pass'] ?? ''), [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_TIMEOUT => 5,
+    ]);
+}
+
+/** Nombre de la tabla de registros (solo letras, numeros y guion bajo). */
+function tablaRegistros(array $db): string
+{
+    $tabla = (string) ($db['table'] ?? TABLA_REGISTROS);
+    return preg_match('/^[A-Za-z0-9_]{1,64}$/', $tabla) ? $tabla : TABLA_REGISTROS;
+}
+
+/** Carpeta privada (fuera de public_html) donde se guardan los documentos subidos. */
+function carpetaDocumentos(): string
+{
+    $ruta = getenv('RN_DOCUMENTOS');
+    if ($ruta === false || $ruta === '') {
+        $ruta = (string) (archivoConfiguracion()['documentos'] ?? '');
+    }
+    if ($ruta === '') {
+        $ruta = carpetasPrivadas()[0] . '/radiologonacional-documentos';
+    }
+    return rtrim($ruta, '/\\');
+}
+
+/* ---------- correo ---------- */
 
 /** Un PHPMailer listo con la conexion SMTP configurada. */
 function nuevoCorreo(array $config): PHPMailer

@@ -4,5 +4,10 @@ dist
 *.local
 *.tsbuildinfo
 
-# configuracion SMTP real: vive fuera de public_html, nunca en el repositorio
+# configuracion real (SMTP y base de datos): vive fuera de public_html, nunca en el repositorio
 radiologonacional-smtp.php
+radiologonacional-bd.php
+dev/config-local.php
+
+# documentos subidos en desarrollo (en produccion van a la carpeta padre de public_html)
+radiologonacional-documentos/
