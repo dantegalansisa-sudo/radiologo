@@ -183,6 +183,8 @@ export const MODAL_REGISTRO = {
   ],
   privacidad: 'Tu información será tratada de forma confidencial y utilizada únicamente para los fines del proyecto.',
   cancelar: 'Cancelar',
+  atras: 'Atrás',
+  siguiente: 'Siguiente',
   enviar: 'Enviar registro',
 };
 

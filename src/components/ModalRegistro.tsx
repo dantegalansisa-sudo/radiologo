@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Icon, { type IconName } from './Icon';
 import Modal from './Modal';
 import { Boton, Manuscrita } from './Piezas';
@@ -6,9 +6,11 @@ import { DISPONIBILIDADES, ESPECIALIDADES, MODAL_REGISTRO, PROVINCIAS, REGIONES,
 import { enviarRegistro } from '../utils/envio';
 
 /*
-  Registro de medico radiologo: un formulario largo en tres bloques con el
-  indicador de pasos arriba. Los pasos no son pantallas separadas: marcan el
-  bloque que se esta viendo y, al pulsarlos, llevan hasta el.
+  Registro de medico radiologo en tres pasos: cada uno muestra solo su bloque
+  y un boton "Siguiente" que valida lo rellenado antes de avanzar. Los tres
+  bloques siguen en el mismo formulario (los ocultos se esconden, no se
+  desmontan) para que al volver atras no se pierda nada y el envio final
+  lleve todos los campos.
 */
 
 const MAX_ARCHIVO = 5 * 1024 * 1024;
@@ -94,30 +96,51 @@ function Archivos({ name, titulo, nota, multiple, required, onChange }: { name: 
 export default function ModalRegistro({ onClose, onExito }: { onClose: () => void; onExito: (correo: string) => void }) {
   const M = MODAL_REGISTRO;
   const [paso, setPaso] = useState(0);
+  /** Hasta que paso ha llegado: los anteriores se pueden revisar pulsandolos. */
+  const [alcanzado, setAlcanzado] = useState(0);
   const [comentario, setComentario] = useState('');
   const [especialidades, setEspecialidades] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const cuerpo = useRef<HTMLDivElement>(null);
   const bloques = useRef<(HTMLElement | null)[]>([]);
+  const pasosRef = useRef<HTMLOListElement>(null);
 
-  // el paso activo sigue al bloque que ocupa la parte alta de la caja
-  useEffect(() => {
-    const contenedor = cuerpo.current;
-    if (!contenedor) return;
-    const mirar = () => {
-      const tope = contenedor.getBoundingClientRect().top + 140;
-      let actual = 0;
-      bloques.current.forEach((b, i) => {
-        if (b && b.getBoundingClientRect().top <= tope) actual = i;
-      });
-      setPaso(actual);
-    };
-    contenedor.addEventListener('scroll', mirar, { passive: true });
-    return () => contenedor.removeEventListener('scroll', mirar);
-  }, []);
+  /** Comprueba los campos de un bloque; muestra el primer aviso del navegador. */
+  const bloqueValido = (i: number): boolean => {
+    const bloque = bloques.current[i];
+    if (!bloque) return true;
+    const campos = bloque.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea');
+    for (const c of campos) {
+      if (!c.checkValidity()) {
+        c.reportValidity();
+        return false;
+      }
+    }
+    if (i === 1 && !especialidades.length) {
+      setError('Selecciona al menos una especialidad de lectura.');
+      return false;
+    }
+    return true;
+  };
 
-  const irAPaso = (i: number) => bloques.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const mostrarPaso = (i: number) => {
+    setPaso(i);
+    setAlcanzado((a) => Math.max(a, i));
+    setError('');
+    // el indicador de pasos queda arriba y el bloque nuevo justo debajo
+    window.requestAnimationFrame(() => pasosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const siguiente = () => {
+    if (!bloqueValido(paso)) return;
+    mostrarPaso(Math.min(2, paso + 1));
+  };
+  const atras = () => mostrarPaso(Math.max(0, paso - 1));
+  /** Desde el indicador solo se puede ir a pasos ya alcanzados. */
+  const irAPaso = (i: number) => {
+    if (i <= alcanzado) mostrarPaso(i);
+  };
 
   const alternarEspecialidad = (e: string) => {
     if (e === 'Todas') {
@@ -131,10 +154,11 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
   const enviar = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
-    if (!especialidades.length) {
-      setError('Selecciona al menos una especialidad de lectura.');
-      irAPaso(1);
-      return;
+    for (const i of [0, 1, 2]) {
+      if (!bloqueValido(i)) {
+        if (i !== paso) mostrarPaso(i);
+        return;
+      }
     }
     const form = new FormData(e.currentTarget);
     form.set('especialidades', especialidades.join(', '));
@@ -154,7 +178,7 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
 
   return (
     <Modal titulo={M.titulo} onClose={onClose} ancho="1120px" className="modal--registro">
-      <form className="reg" onSubmit={enviar} noValidate={false}>
+      <form className="reg" onSubmit={enviar} noValidate>
         <div className="reg__cuerpo" ref={cuerpo}>
           {/* ---------- cabecera con foto ---------- */}
           <header className="reg__cabeza">
@@ -164,10 +188,10 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
               <h2>{M.titulo}</h2>
               <p>{M.subtitulo}</p>
             </div>
-            <ol className="reg__pasos" aria-label="Pasos del registro">
+            <ol className="reg__pasos" aria-label="Pasos del registro" ref={pasosRef}>
               {M.pasos.map((p, i) => (
                 <li key={p} className={i === paso ? 'is-activo' : i < paso ? 'is-hecho' : ''}>
-                  <button type="button" onClick={() => irAPaso(i)}>
+                  <button type="button" onClick={() => irAPaso(i)} disabled={i > alcanzado} aria-current={i === paso ? 'step' : undefined}>
                     <span className="reg__paso-num">{i + 1}</span>
                     <span className="reg__paso-nombre">{p}</span>
                   </button>
@@ -179,7 +203,7 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
           <div className="reg__dos">
             <div className="reg__formulario">
               {/* ---------- 1. datos personales ---------- */}
-              <section className="bloque" ref={(el) => { bloques.current[0] = el; }}>
+              <section className="bloque" ref={(el) => { bloques.current[0] = el; }} hidden={paso !== 0}>
                 <h3>
                   <Icon name="user-round" size={22} strokeWidth={1.8} />
                   1. Datos personales
@@ -228,7 +252,7 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
               </section>
 
               {/* ---------- 2. informacion profesional ---------- */}
-              <section className="bloque" ref={(el) => { bloques.current[1] = el; }}>
+              <section className="bloque" ref={(el) => { bloques.current[1] = el; }} hidden={paso !== 1}>
                 <h3>
                   <Icon name="briefcase" size={22} strokeWidth={1.8} />
                   2. Información profesional
@@ -267,7 +291,7 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
               </section>
 
               {/* ---------- 3. disponibilidad y documentos ---------- */}
-              <section className="bloque" ref={(el) => { bloques.current[2] = el; }}>
+              <section className="bloque" ref={(el) => { bloques.current[2] = el; }} hidden={paso !== 2}>
                 <h3>
                   <Icon name="clock" size={22} strokeWidth={1.8} />
                   3. Disponibilidad y documentos
@@ -338,12 +362,28 @@ export default function ModalRegistro({ onClose, onExito }: { onClose: () => voi
             </p>
           )}
           <div className="reg__acciones">
-            <button type="button" className="btn btn--borde" onClick={onClose} disabled={enviando}>
-              <span>{M.cancelar}</span>
-            </button>
-            <Boton tipo="submit" cargando={enviando}>
-              {M.enviar}
-            </Boton>
+            {paso === 0 ? (
+              <button type="button" className="btn btn--borde" onClick={onClose} disabled={enviando}>
+                <span>{M.cancelar}</span>
+              </button>
+            ) : (
+              <button type="button" className="btn btn--borde" onClick={atras} disabled={enviando}>
+                <Icon name="chevron-left" size={16} strokeWidth={2.4} />
+                <span>{M.atras}</span>
+              </button>
+            )}
+            {paso < 2 ? (
+              <Boton onClick={siguiente}>
+                {M.siguiente}
+              </Boton>
+            ) : (
+              <Boton tipo="submit" cargando={enviando}>
+                {M.enviar}
+              </Boton>
+            )}
+            <span className="reg__contador" aria-hidden="true">
+              Paso {paso + 1} de {M.pasos.length}
+            </span>
           </div>
         </footer>
       </form>

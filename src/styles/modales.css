@@ -627,6 +627,9 @@
   height: 2px;
   background: var(--borde-fuerte);
 }
+.reg__pasos button:disabled {
+  cursor: default;
+}
 .reg__pasos button {
   position: relative;
   display: grid;
@@ -875,8 +878,19 @@
 }
 .reg__acciones {
   display: flex;
+  align-items: center;
   gap: 0.7rem;
   margin-left: auto;
+}
+.reg__contador {
+  order: -1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--tinta-tenue);
+  margin-right: 0.4rem;
+}
+.bloque[hidden] {
+  display: none;
 }
 
 /* ============================================================
