@@ -104,14 +104,16 @@ jobs:
           set mirror:parallel-transfer-count 1
           set mirror:use-pget-n 1"
 
-          # ---- 1. sonda: ¿funciona la conexion de datos con FTPS?
-          # Un LIST necesita el canal de datos. Si con FTPS se corta, se
-          # publica por FTP sin cifrar: el cortafuegos del hosting solo
-          # abre los puertos pasivos cuando puede leer el canal de control.
-          if [ "$PROTOCOLO" = "auto" ]; then
+          # ---- 1. sonda: ¿funciona la conexion de datos?
+          # Un LIST necesita el canal de datos. Se prueba primero con FTPS y,
+          # si se corta, con FTP sin cifrar (el cortafuegos del hosting solo
+          # abre los puertos pasivos cuando puede leer el canal de control).
+          # Si tampoco responde, el job termina enseguida con el aviso, en
+          # lugar de reintentar durante media hora.
+          sonda() {
             cat > sonda.cmd <<EOF
           $COMUN
-          $FTPS
+          $1
           set net:timeout 25
           set net:max-retries 2
           set net:reconnect-interval-base 3
@@ -119,12 +121,18 @@ jobs:
           cls -1 "$CARPETA" > /dev/null
           bye
           EOF
-            if lftp -f sonda.cmd; then
+            lftp -f sonda.cmd
+          }
+          if [ "$PROTOCOLO" = "auto" ]; then
+            if sonda "$FTPS"; then
               PROTOCOLO=ftps
               echo "FTPS responde en el canal de datos: se publica cifrado."
-            else
+            elif sonda "$FTP"; then
               PROTOCOLO=ftp
-              echo "::warning::FTPS no completa la conexion de datos en este hosting. Se publica por FTP sin cifrar (solo van los archivos de la web; las credenciales viajan por la red del hosting)."
+              echo "::warning::FTPS no completa la conexion de datos en este hosting. Se publica por FTP sin cifrar (solo van los archivos de la web)."
+            else
+              echo "::error title=Sin canal de datos FTP::El servidor acepta la conexion pero corta el canal de datos tanto con FTPS como con FTP. Pide al hosting que abra el rango de puertos pasivos del FTP (o que habilite SFTP para la cuenta) y comprueba que FTP_SERVER sea el servidor de radiologonacional.com."
+              exit 1
             fi
           fi
 
@@ -136,8 +144,8 @@ jobs:
           $COMUN
           $SSL
           set net:timeout 60
-          set net:max-retries 6
-          set net:persist-retries 6
+          set net:max-retries 4
+          set net:persist-retries 4
           set net:reconnect-interval-base 5
           set net:reconnect-interval-multiplier 1.5
           set net:reconnect-interval-max 40
