@@ -287,7 +287,7 @@ export function RedProyecto({ abrir }: Props) {
         <h2>{PROYECTO.titulo}</h2>
         <p>{PROYECTO.texto}</p>
         <div className="proyecto__pie">
-          <img className="proyecto__linkdicom" src="/img/linkdicom.webp" alt="LINKDICOM — Conecta y avanza" width={1000} height={156} loading="lazy" />
+          <img className="proyecto__aliado" src="/img/hdco-health.webp" alt="HDCO Health" width={1112} height={476} loading="lazy" />
           <span className="proyecto__sello">
             <img src="/img/manos.webp" alt="" width={600} height={600} loading="lazy" />
             <span>

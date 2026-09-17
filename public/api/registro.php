@@ -384,7 +384,7 @@ function correoBienvenida(string $tratamiento, string $nombre): string
     </table>
   </td></tr>
   <tr><td style="padding:14px 22px 20px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr>$celdas</tr></table></td></tr>
-  <tr><td style="padding:0"><img src="$u/img/correo/pie.jpg" width="660" alt="Radiologo Nacional — Potenciado con tecnología dominicana — LINKDICOM" style="display:block;width:100%;height:auto"></td></tr>
+  <tr><td style="padding:0"><img src="$u/img/correo/pie.jpg" width="660" alt="Radiologo Nacional — Potenciado con tecnología dominicana — HDCO Health" style="display:block;width:100%;height:auto"></td></tr>
   <tr><td style="padding:14px 20px 18px;text-align:center;font-size:12px;line-height:1.6;color:#6b7891">Este es un mensaje automático, por favor no respondas a este correo.<br>© $anio Radiologo Nacional. República Dominicana.</td></tr>
 </table>
 </body>

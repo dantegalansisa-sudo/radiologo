@@ -1,7 +1,7 @@
 # Radiologo Nacional
 
 Landing de demostración de **Radiologo Nacional** (registro nacional de
-radiólogos y red hospitalaria interconectada), desarrollada por LINKDICOM
+radiólogos y red hospitalaria interconectada), desarrollada por HDCO Health
 para presentar el proyecto. Dominio: `radiologonacional.com`.
 
 React 18 + TypeScript + Vite + Framer Motion. Una sola página con sus modales

@@ -491,8 +491,8 @@
   margin-top: auto;
   padding-top: 1.6rem;
 }
-.proyecto__linkdicom {
-  width: clamp(200px, 10rem + 8vw, 300px);
+.proyecto__aliado {
+  width: clamp(130px, 6rem + 4vw, 180px);
 }
 .proyecto__sello {
   display: flex;

@@ -45,7 +45,7 @@ export function ModalProyecto({ onClose }: { onClose: () => void }) {
           <p>{M.iniciativaTexto}</p>
         </div>
         <div className="mp__alianza" aria-hidden="true">
-          <img src="/img/linkdicom.webp" alt="LINKDICOM" width={1000} height={156} />
+          <img src="/img/hdco-health.webp" alt="HDCO Health" width={1112} height={476} />
           <span className="mp__mas">+</span>
           <span className="mp__hdco">
             <Icon name="users" size={40} strokeWidth={1.4} />
@@ -163,7 +163,7 @@ export function ModalRed({ onClose }: { onClose: () => void }) {
           <p>{M.esfuerzoTexto}</p>
         </div>
         <span className="mr__sello">
-          <img src="/img/linkdicom.webp" alt="LINKDICOM" width={1000} height={156} />
+          <img src="/img/hdco-health.webp" alt="HDCO Health" width={1112} height={476} />
           <i>{M.esfuerzoSello}</i>
         </span>
       </div>

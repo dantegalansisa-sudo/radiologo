@@ -29,7 +29,7 @@ export const MENU = [
 
 export const AVISO_DEMO = {
   texto: 'Esta es una página de demostración',
-  destacado: 'funcional de LINKDICOM',
+  destacado: 'funcional de HDCO Health',
   resto: 'para presentación del proyecto.',
   boton: 'Saber más de este proyecto',
 };
@@ -79,9 +79,9 @@ export const RED = {
 
 export const PROYECTO = {
   eyebrow: 'Sobre este proyecto',
-  titulo: 'Un Proyecto auspiciado por tecnología de empresas Dominicanas, lo nuestro al servicio de nuestra nación.',
+  titulo: 'Un Proyecto auspiciado por tecnología de una empresa Dominicana, lo nuestro al servicio de nuestra nación.',
   texto:
-    'Radiologo Nacional es una iniciativa que cuenta con el respaldo tecnológico de LINKDICOM y HDCO, empresas dominicanas especializadas en soluciones de salud, que impulsan este proyecto aportando su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
+    'Radiologo Nacional es una iniciativa que cuenta con el respaldo tecnológico de HDCO Health, empresa dominicana especializada en soluciones de salud, que impulsa este proyecto aportando su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
   sello: ['Tecnología', 'dominicana', 'al servicio', 'de la salud'],
 };
 
@@ -95,7 +95,7 @@ export const PIE = {
     { label: 'Contacto', accion: 'contacto' },
   ] as const,
   copyright: `© ${new Date().getFullYear()} Radiologo Nacional. Todos los derechos reservados.`,
-  desarrollado: 'Desarrollado con tecnología dominicana por LINKDICOM.',
+  desarrollado: 'Desarrollado con tecnología dominicana por HDCO Health.',
 };
 
 /* ---------------- Modal: sobre este proyecto ---------------- */
@@ -115,12 +115,12 @@ export const MODAL_PROYECTO = {
     { icon: 'mapa' as const, titulo: 'Más acceso, más equidad', texto: 'Llevamos diagnósticos de calidad a cada región del país.' },
   ],
   iniciativaEyebrow: 'Una iniciativa tecnológica dominicana',
-  iniciativaTitulo: 'Impulsado por empresas dominicanas, para el bienestar de nuestra nación.',
+  iniciativaTitulo: 'Impulsado por una empresa dominicana, para el bienestar de nuestra nación.',
   iniciativaTexto:
-    'Radiologo Nacional es una iniciativa que cuenta con el respaldo tecnológico de LINKDICOM y HDCO, empresas dominicanas especializadas en soluciones de salud, que impulsan este proyecto aportando su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
+    'Radiologo Nacional es una iniciativa que cuenta con el respaldo tecnológico de HDCO Health, empresa dominicana especializada en soluciones de salud, que impulsa este proyecto aportando su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
   alianza: 'Alianza por una salud más fuerte',
   aviso:
-    'Esta es una versión de demostración funcional desarrollada por LINKDICOM para fines de presentación del proyecto. Las funcionalidades mostradas son una emulación aproximada del resultado final y se encuentran en desarrollo.',
+    'Esta es una versión de demostración funcional desarrollada por HDCO Health para fines de presentación del proyecto. Las funcionalidades mostradas son una emulación aproximada del resultado final y se encuentran en desarrollo.',
   cerrar: 'Cerrar',
 };
 
@@ -164,7 +164,7 @@ export const MODAL_RED = {
   ],
   esfuerzoTitulo: 'Un esfuerzo conjunto por una mejor salud',
   esfuerzoTexto:
-    'Radiologo Nacional es una iniciativa impulsada por las empresas dominicanas LINKDICOM y HDCO, que aportan su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
+    'Radiologo Nacional es una iniciativa impulsada por HDCO Health, empresa dominicana que aporta su experiencia, innovación y compromiso con el desarrollo del sistema de salud del país.',
   esfuerzoSello: 'Tecnología dominicana al servicio de la salud de nuestra gente.',
   cerrar: 'Cerrar',
 };
@@ -257,7 +257,7 @@ export const MODAL_CONTACTO = {
   subtitulo: ['Estamos para orientarte.', 'Escríbenos y nuestro equipo te responderá.'],
   texto:
     'Si tienes preguntas sobre el proyecto, necesitas más información o deseas establecer una alianza, completa el formulario y te contactaremos en el menor tiempo posible.',
-  empresa: 'LINKDICOM, S.R.L.',
+  empresa: 'HDCO Health',
   empresaLema: 'Tecnología dominicana al servicio de la salud',
   direccion: ['Calle Proyecto 1, No. 12, Urb. Fernández', 'Santo Domingo Este, República Dominicana', 'Código Postal: 11903'],
   telefono: '+1 (809) 792-9763',
@@ -315,7 +315,7 @@ export const MODAL_DEMO: Record<'convocatorias' | 'faq' | 'sesion' | 'terminos' 
     icon: 'file-text',
     titulo: 'Términos de uso',
     texto:
-      'Los términos de uso de la plataforma se publicarán con la versión final del proyecto. Esta demostración es una emulación funcional desarrollada por LINKDICOM para fines de presentación.',
+      'Los términos de uso de la plataforma se publicarán con la versión final del proyecto. Esta demostración es una emulación funcional desarrollada por HDCO Health para fines de presentación.',
   },
   privacidad: {
     icon: 'shield',

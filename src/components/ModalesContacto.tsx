@@ -83,7 +83,7 @@ export function ModalContacto({ onClose }: { onClose: () => void }) {
     <Modal titulo={M.titulo} onClose={onClose} ancho="1000px" className="modal--contacto">
       <div className="mc__cabeza">
         <img className="mc__logo" src="/brand/logo.webp" alt={SITIO.nombre} width={1200} height={447} />
-        <img className="mc__edificio" src="/img/edificio.webp" alt="Sede de LINKDICOM" width={952} height={462} />
+        <img className="mc__edificio" src="/img/edificio.webp" alt="Sede de HDCO Health" width={952} height={462} />
       </div>
 
       <div className="mc__dos">
@@ -181,7 +181,7 @@ export function ModalContacto({ onClose }: { onClose: () => void }) {
 
         <aside className="mc__lateral">
           <div className="mc__empresa">
-            <img src="/img/linkdicom.webp" alt="LINKDICOM — Conecta y avanza" width={1000} height={156} />
+            <img src="/img/hdco-health.webp" alt="HDCO Health" width={1112} height={476} />
             <div className="mc__empresa-datos">
               <div>
                 <b>{M.empresa}</b>
