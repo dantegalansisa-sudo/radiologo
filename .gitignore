@@ -1,0 +1,8 @@
+node_modules
+dist
+.DS_Store
+*.local
+*.tsbuildinfo
+
+# configuracion SMTP real: vive fuera de public_html, nunca en el repositorio
+radiologonacional-smtp.php

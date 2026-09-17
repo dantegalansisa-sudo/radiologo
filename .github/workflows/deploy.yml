@@ -1,0 +1,58 @@
+# Publica la web en el cPanel de radiologonacional.com por FTP en cada push
+# a main. Secrets del repositorio: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD.
+# Si el hosting bloquea el FTP (lo hace cada 28 dias), el job falla con un
+# aviso: hay que desbloquearlo en el panel del hosting y relanzar.
+
+name: Publicar en cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-cpanel
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    name: Compilar y subir por FTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v6
+      - name: Preparar Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Compilar la web
+        run: npm run build
+      - name: Subir dist/ a public_html
+        id: ftp
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: loose
+          local-dir: ./dist/
+          server-dir: public_html/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            .user.ini
+            **/.user.ini
+          log-level: standard
+      - name: Aviso si el FTP rechazo la conexion
+        if: failure() && steps.ftp.outcome == 'failure'
+        run: |
+          echo "::error title=La publicacion fallo::Si el registro muestra un error de conexion o de autenticacion FTP, revisa en el panel del hosting el interruptor 'FTP bloqueado', desbloquealo y vuelve a lanzar este job con 'Re-run jobs'."
+          exit 1
