@@ -1,7 +1,26 @@
-# Publica la web en el cPanel de radiologonacional.com por FTP en cada push
-# a main. Secrets del repositorio: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD.
-# Si el hosting bloquea el FTP (lo hace cada 28 dias), el job falla con un
-# aviso: hay que desbloquearlo en el panel del hosting y relanzar.
+# ============================================================
+#  Publicar la web en cPanel por FTP (lftp mirror)
+#
+#  Cada push a main compila la web y sube dist/ a public_html. Tambien se
+#  puede lanzar a mano desde la pestana Actions.
+#
+#  Se usa lftp en lugar de la accion FTP-Deploy porque el FTPS de este
+#  hosting corta la conexion de datos de vez en cuando ("ECONNRESET (data
+#  socket)"): lftp reconecta y reintenta cada archivo por su cuenta, sube de
+#  uno en uno en modo pasivo, y el paso entero se repite hasta tres veces.
+#
+#  Nunca borra nada del servidor: mirror sin --delete solo sube o sustituye
+#  archivos de dist/. .user.ini (lo genera cPanel) no se toca.
+#
+#  ATENCION: el hosting bloquea el FTP cada 28 dias. Si el job falla con un
+#  error de conexion o de autenticacion, desbloquearlo en el panel del
+#  hosting ("FTP bloqueado") y relanzar con "Re-run jobs".
+#
+#  Secrets (Settings > Secrets and variables > Actions):
+#    FTP_SERVER     por ejemplo ftp.radiologonacional.com
+#    FTP_USERNAME   usuario FTP del cPanel de radiologonacional.com
+#    FTP_PASSWORD   su contrasena
+# ============================================================
 
 name: Publicar en cPanel
 
@@ -9,6 +28,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      protocolo:
+        description: 'ftps (cifrado, por defecto) o ftp (sin cifrar, solo si FTPS no funciona)'
+        default: ftps
+        type: choice
+        options: [ftps, ftp]
+      carpeta:
+        description: 'Carpeta remota (./ si el usuario FTP ya apunta a public_html)'
+        default: public_html/
+        type: string
 
 concurrency:
   group: publicar-cpanel
@@ -18,41 +47,96 @@ jobs:
   publicar:
     name: Compilar y subir por FTP
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+
     steps:
       - name: Descargar el codigo
         uses: actions/checkout@v6
+
       - name: Preparar Node 20
         uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
+
       - name: Instalar dependencias
         run: npm ci
+
       - name: Compilar la web
         run: npm run build
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
       - name: Subir dist/ a public_html
         id: ftp
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          port: 21
-          security: loose
-          local-dir: ./dist/
-          server-dir: public_html/
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            .user.ini
-            **/.user.ini
-          log-level: standard
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          # lftp la lee de LFTP_PASSWORD: asi no pasa por la linea de comandos
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          PROTOCOLO: ${{ github.event.inputs.protocolo || 'ftps' }}
+          CARPETA: ${{ github.event.inputs.carpeta || 'public_html/' }}
+        run: |
+          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$LFTP_PASSWORD" ]; then
+            echo "::error title=Faltan secrets::Define FTP_SERVER, FTP_USERNAME y FTP_PASSWORD en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          if [ "$PROTOCOLO" = "ftp" ]; then
+            SSL="set ftp:ssl-allow false"
+          else
+            # FTPS explicito: control y datos cifrados. El certificado del
+            # hosting llega con la cadena incompleta, por eso no se verifica.
+            SSL="set ftp:ssl-allow true
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ftp:ssl-protect-list true
+          set ssl:verify-certificate false"
+          fi
+
+          cat > lftp.cmd <<EOF
+          set cmd:fail-exit true
+          $SSL
+          # modo pasivo, una transferencia a la vez y reintentos generosos:
+          # el servidor corta la conexion de datos de vez en cuando
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          set ftp:use-mdtm false
+          set net:timeout 120
+          set net:max-retries 10
+          set net:persist-retries 10
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-multiplier 1.5
+          set net:reconnect-interval-max 60
+          set net:limit-rate 0
+          set xfer:clobber true
+          set mirror:parallel-transfer-count 1
+          set mirror:use-pget-n 1
+          open --env-password -u "$FTP_USERNAME" "$PROTOCOLO://$FTP_SERVER"
+          mirror --reverse --verbose=1 --no-perms --no-symlinks --transfer-all \
+            --exclude-glob .user.ini --exclude-glob .git* \
+            ./dist/ "$CARPETA"
+          bye
+          EOF
+
+          # el paso entero se repite si lftp acaba en error (tras agotar sus
+          # propios reintentos por archivo)
+          for intento in 1 2 3; do
+            echo "::group::Subida, intento $intento"
+            if lftp -f lftp.cmd; then
+              echo "::endgroup::"
+              echo "Publicado en $FTP_SERVER/$CARPETA"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::La subida fallo (intento $intento de 3). Se vuelve a intentar en 30 s."
+            sleep 30
+          done
+          exit 1
+
       - name: Aviso si el FTP rechazo la conexion
         if: failure() && steps.ftp.outcome == 'failure'
         run: |
-          echo "::error title=La publicacion fallo::Si el registro muestra un error de conexion o de autenticacion FTP, revisa en el panel del hosting el interruptor 'FTP bloqueado', desbloquealo y vuelve a lanzar este job con 'Re-run jobs'."
+          echo "::error title=La publicacion fallo::Si el registro muestra errores de conexion o de autenticacion FTP, revisa en el panel del hosting el interruptor 'FTP bloqueado' (se activa solo cada 28 dias), desbloquealo y vuelve a lanzar este job con 'Re-run jobs'. Si el error es de la conexion de datos con FTPS, lanza el job a mano (Run workflow) con protocolo 'ftp'."
           exit 1
